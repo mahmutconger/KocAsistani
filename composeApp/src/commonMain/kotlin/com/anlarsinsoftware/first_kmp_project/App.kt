@@ -1,59 +1,136 @@
 package com.anlarsinsoftware.first_kmp_project
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.anlarsinsoftware.first_kmp_project.data.model.StudySession
-import com.anlarsinsoftware.first_kmp_project.data.service.FirebaseService
-import org.jetbrains.compose.ui.tooling.preview.Preview
-import kotlinx.coroutines.launch
+import com.anlarsinsoftware.first_kmp_project.data.model.Role
+import com.anlarsinsoftware.first_kmp_project.ui.auth.LoginScreen
+import com.anlarsinsoftware.first_kmp_project.ui.auth.RoleSelectionScreen
+import com.anlarsinsoftware.first_kmp_project.ui.coach.CoachDashboardScreen
+import com.anlarsinsoftware.first_kmp_project.ui.coach.CoachStudentDetailScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.StudentDashboardScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.StudentEntryScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.StudentProfileScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.StudentSetupScreen
+import com.anlarsinsoftware.first_kmp_project.viewmodel.AuthState
+import com.anlarsinsoftware.first_kmp_project.viewmodel.AuthViewModel
+enum class StudentNav { DASHBOARD, ENTRY, PROFILE }
+enum class CoachNav { DASHBOARD, DETAIL }
 
 @Composable
-@Preview
 fun App() {
     MaterialTheme {
-        val scope = rememberCoroutineScope()
+        val authViewModel = remember { AuthViewModel() }
 
-        // Firebase servisinin örneğini al
-        val firebaseService = remember { FirebaseService() }
+        when (authViewModel.authState) {
+            AuthState.IDLE, AuthState.LOGIN -> {
+                LoginScreen(
+                    onAuthAction = { email, pass, isRegister ->
+                        authViewModel.onLoginOrRegister(email, pass, isRegister)
+                    },
+                    isLoading = authViewModel.isLoading,
+                    error = authViewModel.errorMessage
+                )
+            }
 
-        // İlk kayıt işlemini yapmak için bir Composable
-        Column(Modifier.fillMaxSize().padding(20.dp), Arrangement.Center) {
+            AuthState.ROLE_SELECTION -> {
+                RoleSelectionScreen(
+                    onRoleSelected = { role -> authViewModel.onRoleSelected(role) },
+                    isLoading = authViewModel.isLoading
+                )
+            }
 
-            Text("Koç Asistanı V0.1 Hazır")
+            AuthState.COMPLETED -> {
+                val user = authViewModel.currentUser
 
-            Spacer(Modifier.height(20.dp))
+                // Kullanıcı null ise (olmamalı ama) Login'e dön
+                if (user == null) {
+                    // Hata durumu, login'e atılabilir
+                } else {
+                    // --- ÖĞRENCİ AKIŞI ---
+                    if (user.role == Role.STUDENT.name) {
 
-            Button(onClick = {
-                // Coroutine başlattık çünkü Firestore işlemleri askıya alma (suspend) gerektirir.
-                scope.launch {
-                    val testSession = StudySession(
-                        studentId = "TEST_OGRENCI_1", // Test öğrencisi ID'si
-                        subjectName = "Matematik",
-                        topicName = "Türev",
-                        solvedCount = 50,
-                        correctCount = 40,
-                        wrongCount = 10
-                    )
+                        // Sınav seçmiş mi?
+                        if (user.targetExam.isNullOrBlank()) {
+                            // SEÇMEMİŞ -> KURULUM EKRANI
+                            StudentSetupScreen(
+                                onExamSelected = { exam ->
+                                    authViewModel.onExamSelected(exam.id)
+                                }
+                            )
+                        } else {
+                            // --- ÖĞRENCİ İÇİ NAVİGASYON ---
+                            var studentNav by remember { mutableStateOf(StudentNav.DASHBOARD) }
 
-                    try {
-                        firebaseService.saveStudySession(testSession)
-                        println("Başarılı! Veri Firestore'a kaydedildi: ${testSession.topicName}")
-                    } catch (e: Exception) {
-                        println("HATA: Kayıt yapılırken sorun oluştu: ${e.message}")
+                            when (studentNav) {
+                                StudentNav.DASHBOARD -> {
+                                    StudentDashboardScreen(
+                                        userId = user.id,
+                                        targetExamId = user.targetExam,
+                                        onAddStudyClick = { studentNav = StudentNav.ENTRY },
+                                        onProfileClick = { studentNav = StudentNav.PROFILE } // YENİ
+                                    )
+                                }
+
+                                StudentNav.ENTRY -> {
+                                    StudentEntryScreen(
+                                        userId = user.id,
+                                        targetExamId = user.targetExam,
+                                        onBackClick = {
+                                            // Geri basınca Dashboard'a dön
+                                            studentNav = StudentNav.DASHBOARD
+                                        }
+                                    )
+                                }
+                                StudentNav.PROFILE -> {
+                                    StudentProfileScreen(
+                                        studentId = user.id,
+                                        email = user.email,
+                                        exam = user.targetExam,
+                                        onBackClick = { studentNav = StudentNav.DASHBOARD }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    // --- KOÇ AKIŞI ---
+                    else if (user.role == Role.COACH.name) {
+                        // Koç Navigasyon State'i
+                        var coachNav by remember { mutableStateOf(CoachNav.DASHBOARD) }
+                        var selectedStudentId by remember { mutableStateOf("") }
+
+                        when (coachNav) {
+                            CoachNav.DASHBOARD -> {
+                                CoachDashboardScreen(
+                                    coachId = user.id,
+                                    onGenerateCodeClick = { /* Kod üretme buradaydı */ },
+                                    onStudentClick = { studentId ->
+                                        // Öğrenciye tıklanınca ID'yi al ve detay ekranına geç
+                                        selectedStudentId = studentId
+                                        coachNav = CoachNav.DETAIL
+                                    }
+                                )
+                            }
+
+                            CoachNav.DETAIL -> {
+                                CoachStudentDetailScreen(
+                                    studentId = selectedStudentId,
+                                    onBackClick = {
+                                        coachNav = CoachNav.DASHBOARD
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-            }) {
-                Text("Firestore'a Test Verisi Kaydet")
             }
         }
     }
