@@ -111,4 +111,12 @@ class AuthViewModel {
             }
         }
     }
+    fun signOut() {
+        scope.launch {
+            authService.signOut() // Firebase'den çıkış yap
+            currentUser = null    // Kullanıcı verisini sil
+            errorMessage = null   // Hataları temizle
+            authState = AuthState.LOGIN // Ekranı tekrar LOGIN moduna al
+        }
+    }
 }
