@@ -3,7 +3,9 @@ package com.anlarsinsoftware.first_kmp_project.viewmodel
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.anlarsinsoftware.first_kmp_project.data.model.Assignment
 import com.anlarsinsoftware.first_kmp_project.data.model.StudyLog
+import com.anlarsinsoftware.first_kmp_project.data.repository.AssignmentRepository
 import com.anlarsinsoftware.first_kmp_project.data.repository.ExamRepository
 import com.anlarsinsoftware.first_kmp_project.data.repository.StudyRepository
 import com.anlarsinsoftware.first_kmp_project.ui.components.toLocalDateTime
@@ -20,10 +22,14 @@ import kotlin.time.ExperimentalTime
 
 class StudentDashboardViewModel {
     private val studyRepository = StudyRepository()
+    private val assignmentRepository = AssignmentRepository()
     private val examRepository = ExamRepository()
     private val scope = CoroutineScope(Dispatchers.IO)
 
     var logs by mutableStateOf<List<StudyLog>>(emptyList())
+        private set
+
+    var assignments by mutableStateOf<List<Assignment>>(emptyList())
         private set
 
     var daysLeft by mutableStateOf(0L)
@@ -57,12 +63,25 @@ class StudentDashboardViewModel {
 
                 daysLeft = today.daysUntil(examDate).toLong()
             }
+
+            scope.launch {
+                assignmentRepository.getAssignments(userId).collect { list ->
+                    assignments = list
+                }
+            }
         }
 
         scope.launch {
             studyRepository.getStudyLogs(userId).collect { fetchedLogs ->
                 logs = fetchedLogs
             }
+        }
+
+
+    }
+    fun toggleAssignment(assignment: Assignment) {
+        scope.launch {
+            assignmentRepository.toggleCompletion(assignment.id, !assignment.isCompleted)
         }
     }
 }
