@@ -14,16 +14,22 @@ import androidx.compose.ui.Modifier
 import com.anlarsinsoftware.first_kmp_project.data.model.Role
 import com.anlarsinsoftware.first_kmp_project.ui.auth.LoginScreen
 import com.anlarsinsoftware.first_kmp_project.ui.auth.RoleSelectionScreen
+import com.anlarsinsoftware.first_kmp_project.ui.chat.ChatScreen
 import com.anlarsinsoftware.first_kmp_project.ui.coach.CoachDashboardScreen
 import com.anlarsinsoftware.first_kmp_project.ui.coach.CoachStudentDetailScreen
+import com.anlarsinsoftware.first_kmp_project.ui.coach.schedule.CoachScheduleScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.FocusDashboardScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.FocusTimerScreen
 import com.anlarsinsoftware.first_kmp_project.ui.student.StudentDashboardScreen
 import com.anlarsinsoftware.first_kmp_project.ui.student.StudentEntryScreen
-import com.anlarsinsoftware.first_kmp_project.ui.student.StudentProfileScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.StudentScheduleScreen
 import com.anlarsinsoftware.first_kmp_project.ui.student.StudentSetupScreen
+import com.anlarsinsoftware.first_kmp_project.ui.student.profile.StudentProfileScreen
 import com.anlarsinsoftware.first_kmp_project.viewmodel.AuthState
 import com.anlarsinsoftware.first_kmp_project.viewmodel.AuthViewModel
-enum class StudentNav { DASHBOARD, ENTRY, PROFILE }
-enum class CoachNav { DASHBOARD, DETAIL }
+
+enum class StudentNav { DASHBOARD, ENTRY, PROFILE, CHAT , SCHEDULE, FOCUS_DASHBOARD, FOCUS_TIMER}
+enum class CoachNav { DASHBOARD, DETAIL, CHAT, SCHEDULE }
 
 @Composable
 fun App() {
@@ -76,7 +82,10 @@ fun App() {
                                         userId = user.id,
                                         targetExamId = user.targetExam,
                                         onAddStudyClick = { studentNav = StudentNav.ENTRY },
-                                        onProfileClick = { studentNav = StudentNav.PROFILE } // YENİ
+                                        onProfileClick = { studentNav = StudentNav.PROFILE },
+                                        onChatClick = { studentNav = StudentNav.CHAT },
+                                        onScheduleClick = {studentNav = StudentNav.SCHEDULE},
+                                        onFocusClick = { studentNav = StudentNav.FOCUS_DASHBOARD }
                                     )
                                 }
 
@@ -90,13 +99,57 @@ fun App() {
                                         }
                                     )
                                 }
+
                                 StudentNav.PROFILE -> {
                                     StudentProfileScreen(
                                         studentId = user.id,
                                         email = user.email,
                                         exam = user.targetExam,
-                                        onBackClick = { studentNav = StudentNav.DASHBOARD }
+                                        onBackClick = { studentNav = StudentNav.DASHBOARD },
+                                        onSignOut = {
+                                            authViewModel.signOut()
+                                        }
                                     )
+                                }
+                                StudentNav.FOCUS_DASHBOARD -> {
+                                    FocusDashboardScreen(
+                                        onBackClick = { studentNav = StudentNav.DASHBOARD },
+                                        onStartFocusClick = { studentNav = StudentNav.FOCUS_TIMER }
+                                    )
+                                }
+
+                                // YENİ: SAYAÇ EKRANI
+                                StudentNav.FOCUS_TIMER -> {
+                                    FocusTimerScreen(
+                                        studentId = user.id,
+                                        onCloseClick = {
+                                            // Timer kapatılınca Dashboard'a veya Focus özetine dön
+                                            studentNav = StudentNav.FOCUS_DASHBOARD
+                                        }
+                                    )
+                                }
+
+                                StudentNav.CHAT -> {
+                                    // Eğer öğrencinin koçu yoksa burada uyarı verebiliriz ama şimdilik bağlı varsayalım
+                                    if (user.coachId != null) {
+                                        ChatScreen(
+                                            currentUserId = user.id,
+                                            coachId = user.coachId, // Öğrencinin koçu
+                                            studentId = user.id,    // Kendisi
+                                            chatTitle = "Koçum",
+                                            onBackClick = { studentNav = StudentNav.DASHBOARD }
+                                        )
+                                    } else {
+                                        // Koç yoksa Profile yönlendir
+                                        studentNav = StudentNav.PROFILE
+                                    }
+                                }
+
+                                StudentNav.SCHEDULE -> {
+                                    StudentScheduleScreen(studentId = user.id, onBackClick = { studentNav = StudentNav.DASHBOARD})
+                                    // Geri butonu eklemek istersen Scaffold'u buraya da taşıyabiliriz,
+                                    // ya da Android'in geri tuşuna güvenebiliriz.
+                                    // Şimdilik en alta bir "Geri Dön" butonu koyabilirsin test için.
                                 }
                             }
                         }
@@ -125,7 +178,28 @@ fun App() {
                                     studentId = selectedStudentId,
                                     onBackClick = {
                                         coachNav = CoachNav.DASHBOARD
-                                    }
+                                    },
+                                    onChatClick ={
+                                        coachNav = CoachNav.CHAT
+                                    },
+                                    onScheduleClick = { coachNav = CoachNav.SCHEDULE },
+                                    coachId = user.coachId.toString()
+                                )
+                            }
+                            CoachNav.CHAT -> {
+                                ChatScreen(
+                                    currentUserId = user.id,
+                                    coachId = user.id,          // Kendisi
+                                    studentId = selectedStudentId, // Seçili öğrenci
+                                    chatTitle = "Öğrenci Sohbeti",
+                                    onBackClick = { coachNav = CoachNav.DETAIL }
+                                )
+                            }
+                            CoachNav.SCHEDULE -> {
+                                CoachScheduleScreen(
+                                    coachId = user.id,
+                                    studentId = selectedStudentId,
+                                    onBackClick = { coachNav = CoachNav.DETAIL }
                                 )
                             }
                         }

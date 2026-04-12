@@ -48,6 +48,7 @@ kotlin {
             implementation(libs.firebase.common)
             implementation(libs.firebase.config)
             implementation(libs.kotlinx.datetime)
+            implementation(project.dependencies.platform(libs.firebase.bom))
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
